@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const kitSelectorMenu = document.getElementById('kit-selector-menu');
     const kitSelectorLabel = document.getElementById('kit-selector-label');
     const btnConnect = document.getElementById('btn-connect');
+    const btnConnectBle = document.getElementById('btn-connect-ble');
     const statusEl = document.getElementById('connection-status');
     const logEl = document.getElementById('serial-log');
     const btnClearLog = document.getElementById('btn-clear-log');
@@ -124,6 +125,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeSensor = null;
     let timeLabels = [];
     let sensorValues = {}; // 실시간 센서 값 저장
+    
+    // 블록코딩(실행) 시 센서값을 가져오기 위한 전역 함수 등록
+    hw.getSensorValue = function(sensorId) {
+        return sensorValues[sensorId] !== undefined && sensorValues[sensorId] !== null ? sensorValues[sensorId] : 0;
+    };
 
     let sensorChart = new Chart(ctx, {
         type: 'line',
@@ -534,20 +540,48 @@ document.addEventListener('DOMContentLoaded', () => {
         sensorChart.update();
     }
 
+    let sensorPingInterval = null;
+
     // ============================================================
     // UI 업데이트 함수
     // ============================================================
-    function updateConnectionUI(connected) {
+    function updateConnectionUI(connected, mode = 'wired') {
         isConnected = connected;
+
+        // 센서 자동 갱신(PING) 타이머 관리
+        if (sensorPingInterval) {
+            clearInterval(sensorPingInterval);
+            sensorPingInterval = null;
+        }
+
         if (connected) {
-            btnConnect.textContent = '연결 해제';
-            statusEl.textContent = '연결됨';
+            if (mode === 'wired') {
+                btnConnect.textContent = '연결 해제';
+                btnConnect.classList.remove('hidden');
+                if (btnConnectBle) btnConnectBle.classList.add('hidden');
+                statusEl.textContent = '유선 연결됨';
+            } else {
+                if (btnConnectBle) btnConnectBle.textContent = '연결 해제';
+                if (btnConnectBle) btnConnectBle.classList.remove('hidden');
+                btnConnect.classList.add('hidden');
+                statusEl.textContent = 'BLE 연결됨';
+            }
             statusEl.classList.remove('bg-red-500/90', 'border-red-400/50');
             statusEl.classList.add('bg-emerald-500/90', 'border-emerald-400/50');
+
+            // 0.4초마다 센서 데이터 요청 (학생들에게 실시간처럼 느껴지는 최적의 속도)
+            sensorPingInterval = setInterval(() => {
+                if (isConnected && window.ArduinoSerial) {
+                    window.ArduinoSerial.sendCommand('PING\n');
+                }
+            }, 400);
         } else {
             btnConnect.textContent = '시리얼 연결';
+            btnConnect.classList.remove('hidden');
+            if (btnConnectBle) btnConnectBle.textContent = '블루투스 연결';
+            if (btnConnectBle) btnConnectBle.classList.remove('hidden');
             statusEl.textContent = '연결 끊김';
-            statusEl.classList.remove('bg-emerald-500/90', 'border-emerald-400/50');
+            statusEl.classList.remove('bg-emerald-500/90', 'border-red-400/50');
             statusEl.classList.add('bg-red-500/90', 'border-red-400/50');
             
             // 센서 값 초기화
@@ -572,6 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     serial.onDisconnect = () => {
         if (pumpHeartbeatInterval) { clearInterval(pumpHeartbeatInterval); pumpHeartbeatInterval = null; }
+        if (typeof sensorPingInterval !== 'undefined' && sensorPingInterval) { clearInterval(sensorPingInterval); sensorPingInterval = null; }
         updateConnectionUI(false);
     };
 
@@ -619,9 +654,11 @@ document.addEventListener('DOMContentLoaded', () => {
     btnConnect.addEventListener('click', async () => {
         if (!isConnected) {
             try {
-                const success = await serial.connect();
+                window.ArduinoCommManager.setMode('wired');
+                // 사용자 제스처 유실 방지를 위해 Proxy 대신 직접 호출
+                const success = await window.ArduinoSerialWired.connect();
                 if (success) {
-                    updateConnectionUI(true);
+                    updateConnectionUI(true, 'wired');
                     
                     // 연결 성공 시 키트별 초기화
                     const kit = window.KitRegistry.get(currentKitId);
@@ -641,6 +678,54 @@ document.addEventListener('DOMContentLoaded', () => {
             await serial.disconnect();
         }
     });
+
+    if (btnConnectBle) {
+        const bleModal = document.getElementById('ble-name-prompt-modal');
+        const bleInput = document.getElementById('ble-name-prompt-input');
+        const btnBleOk = document.getElementById('btn-ble-prompt-ok');
+        const btnBleCancel = document.getElementById('btn-ble-prompt-cancel');
+
+        btnConnectBle.addEventListener('click', async () => {
+            if (!isConnected) {
+                bleInput.value = '';
+                bleModal.classList.remove('hidden');
+                bleInput.focus();
+            } else {
+                await serial.disconnect();
+            }
+        });
+
+        btnBleCancel.addEventListener('click', () => {
+            bleModal.classList.add('hidden');
+        });
+
+        btnBleOk.addEventListener('click', async () => {
+            bleModal.classList.add('hidden');
+            const deviceName = bleInput.value.trim();
+            
+            try {
+                window.ArduinoCommManager.setMode('ble');
+                // 사용자 제스처 유실 방지를 위해 Proxy 대신 직접 호출
+                const success = await window.ArduinoBLE.connect(deviceName);
+                if (success) {
+                    updateConnectionUI(true, 'ble');
+                    
+                    // 연결 성공 시 키트별 초기화
+                    const kit = window.KitRegistry.get(currentKitId);
+                    if (kit && kit.onConnect) {
+                        setTimeout(() => {
+                            if (isConnected) {
+                                kit.onConnect(hw);
+                            }
+                        }, 2500);
+                    }
+                }
+            } catch (error) {
+                console.error("BLE 연결 에러 발생:", error);
+                serial.log('BLE 연결 실패: ' + (error.message || '알 수 없는 에러'));
+            }
+        });
+    }
 
     // 로그 지우기
     btnClearLog.addEventListener('click', () => {
@@ -696,12 +781,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isConnected && hw.sendPinConfig) {
             hw.sendPinConfig(config);
-            setTimeout(() => { 
-                if (hw.turnOffRgbLed) hw.turnOffRgbLed(); 
+            // BLE 환경에서 DHT 센서(2초 간격 30ms 블로킹)와 긴 CFG 문자열 청크가 충돌하여 파싱이 무시되는 확률을 완전히 제거하기 위해
+            // 시간차를 두고 2번 더 강제 발송하여 최소 1번은 100% 도달하도록 보장합니다.
+            setTimeout(() => { if (isConnected) hw.sendPinConfig(config); }, 800);
+            setTimeout(() => { if (isConnected) hw.sendPinConfig(config); }, 1600);
+            
+            setTimeout(() => {
+                alert('핀 설정이 기기에 전송되었습니다.');
             }, 100);
-            alert('핀 설정이 아두이노로 전송되었습니다.');
         } else {
-            alert('설정은 저장되었으나 시리얼이 연결되지 않아 전송되지 않았습니다.');
+            alert('설정이 저장되었습니다. (기기와 연결되면 자동 적용됩니다)');
         }
 
         modalPinConfig.classList.add('hidden');

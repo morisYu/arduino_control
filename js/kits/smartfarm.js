@@ -35,7 +35,7 @@ window.KitRegistry.register('smartfarm', {
         { id: 'temp', label: '온도', unit: '°C', icon: '🌡️', color: '#ef4444' },
         { id: 'humid', label: '습도', unit: '%', icon: '💧', color: '#3b82f6' },
         { id: 'light', label: '조도', unit: '', icon: '☀️', color: '#eab308' },
-        { id: 'soil', label: '토양 수분', unit: '%', icon: '🪴', color: '#22c55e' }
+        { id: 'soil', label: '토양 수분', unit: '', icon: '🌱', color: '#22c55e' }
     ],
     
     actuators: [
@@ -364,12 +364,15 @@ window.KitRegistry.register('smartfarm', {
             try {
                 const config = JSON.parse(savedPins);
                 hw.sendPinConfig(config);
-                setTimeout(() => { 
-                    hw.turnOffRgbLed && hw.turnOffRgbLed(); 
-                    hw.turnOffPump && hw.turnOffPump(); 
-                }, 100);
+                setTimeout(() => { hw.sendPinConfig(config); }, 800);
+                setTimeout(() => { hw.sendPinConfig(config); }, 1600);
             } catch(e) { console.error('핀 설정 로드 오류:', e); }
         }
+        
+        // 연결 시 LED 초기화 (꺼짐)
+        setTimeout(() => {
+            hw.turnOffRgbLed();
+        }, 500);
     },
 
     renderActuatorExtras: function(container, actuatorId) {

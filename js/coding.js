@@ -711,9 +711,9 @@ function stopCode() {
         window.__cancelBlocklyRun();
     }
     
-    // 시리얼 전송 대기열을 완전히 비워 이전에 쌓인 명령을 취소 (인터럽트)
-    if (window.SmartFarmSerial && window.SmartFarmSerial.clearQueue) {
-        window.SmartFarmSerial.clearQueue();
+    // 시리얼 전송 대기열을 완전히 비워 이전에 쌓인 명령들 취소 (인터럽트)
+    if (window.ArduinoSerial && window.ArduinoSerial.clearQueue) {
+        window.ArduinoSerial.clearQueue();
     }
     
     // 현재 실행 중인 딜레이나 작업들을 강제 종료하기 위해 하드웨어를 즉시 멈춤

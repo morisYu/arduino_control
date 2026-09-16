@@ -98,6 +98,9 @@
                     핀 설정
                 </button>
                 <span id="connection-status" class="px-4 py-2 rounded-full bg-red-500/90 text-white text-sm font-bold shadow-sm transition-colors w-full xl:w-auto text-center block xl:inline-block border border-red-400/50 backdrop-blur-sm">연결 끊김</span>
+                <button id="btn-connect-ble" class="xl:bg-blue-600 bg-blue-600 xl:text-white text-white dark:bg-blue-500 dark:text-white xl:hover:bg-blue-700 hover:bg-blue-700 px-5 py-2 rounded-full text-sm font-extrabold shadow-md transition w-full xl:w-auto text-center xl:border-none border-blue-700 border">
+                    블루투스 연결
+                </button>
                 <button id="btn-connect" class="xl:bg-indigo-600 bg-indigo-600 xl:text-white text-white dark:bg-indigo-500 dark:text-white xl:hover:bg-indigo-700 hover:bg-indigo-700 px-5 py-2 rounded-full text-sm font-extrabold shadow-md transition w-full xl:w-auto text-center xl:border-none border-indigo-700 border">
                     시리얼 연결
                 </button>
@@ -144,7 +147,7 @@
             <!-- 시리얼 로그 -->
             <div class="flex-grow flex flex-col min-h-[120px] bg-white dark:bg-slate-800 rounded-xl p-4 border border-gray-200 dark:border-slate-700 shadow-sm transition-colors mb-2">
                 <div class="flex justify-between items-center mb-2">
-                    <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400">통신 로그 (Web Serial)</h3>
+                    <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400">통신 로그</h3>
                     <button id="btn-clear-log" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 underline">지우기</button>
                 </div>
                 <div id="serial-log" class="flex-grow bg-slate-900 text-green-400 text-xs font-mono p-3 rounded-lg overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner"></div>
@@ -231,6 +234,26 @@
         </div>
     </div>
 
+    <!-- BLE Device Name Prompt Modal -->
+    <div id="ble-name-prompt-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-[2px]">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-6 w-full max-w-sm transform transition-all border-2 border-blue-500 dark:border-blue-600">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 text-xl">
+                    📶
+                </div>
+                <h2 class="text-lg font-bold text-gray-800 dark:text-gray-200">기기 이름 입력</h2>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                연결할 블루투스 모듈 이름의 일부(시작 단어)를 입력해주세요.<br>(예: BT05 입력 시 BT05_01, BT05_02 모두 검색)
+            </p>
+            <input type="text" id="ble-name-prompt-input" class="w-full bg-gray-50 dark:bg-slate-900 border-2 border-gray-200 dark:border-slate-700 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 rounded-xl px-4 py-3 text-sm mb-5 outline-none transition-all dark:text-white font-medium" placeholder="예: FARM-01">
+            <div class="flex gap-3">
+                <button id="btn-ble-prompt-cancel" class="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-bold py-2.5 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition">취소</button>
+                <button id="btn-ble-prompt-ok" class="flex-1 bg-blue-500 text-white font-bold py-2.5 rounded-xl hover:bg-blue-600 shadow-md shadow-blue-500/30 transition">찾기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript Modules -->
     <script src="https://cdn.jsdelivr.net/npm/web-serial-polyfill@1.0.15/dist/serial.js"></script>
     <script>
@@ -243,13 +266,16 @@
     <!-- 키트 정의 파일들 -->
     <script src="js/kits/smartfarm.js?v=6"></script>
     <script src="js/kits/handino.js?v=7"></script>
+    <!-- 통신 모듈들 -->
+    <script src="js/serial.js?v=8"></script>
+    <script src="js/ble.js?v=1"></script>
+    <script src="js/comm_manager.js?v=1"></script>
     <!-- 코어 모듈 -->
     <script src="js/ai.js?v=10"></script>
     <script src="js/blocks.js?v=6" defer></script>
     <script src="js/blocks-ai.js?v=8" defer></script>
     <script type="module" src="js/coding.js?v=10"></script>
-    <script src="js/serial.js?v=7"></script>
     <script src="js/hardware.js?v=7"></script>
-    <script type="module" src="js/app.js?v=7"></script>
+    <script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>

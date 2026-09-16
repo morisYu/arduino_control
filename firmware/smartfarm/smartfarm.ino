@@ -1,5 +1,8 @@
 #include <DHT.h>
 
+#include <SoftwareSerial.h>
+SoftwareSerial BTSerial(2, 5); // RX: 2, TX: 5 (Hardware Serial 충돌 회피용)
+
 int pinPumpDir = 7;
 int pinPumpPwm = 6;
 int pinBuzzer = 4;
@@ -8,9 +11,9 @@ int pinRgbG = 10;
 int pinRgbB = 11;
 int pinLight = A0; // DO(디지털 출력) 조도센서 핀 - digitalRead로 읽음
 int pinSoil = A1;
-int pinDht = 3; // DHT 온습도 센서 기본 핀
+int pinDht = 3; // DHT 온습도센서 기본 핀
 
-bool lightDO = true; // true: DO 타입(digitalRead), false: AO 타입(analogRead)
+bool lightDO = true; // true: DO 핀(digitalRead), false: AO 핀(analogRead)
 
 #define DHTTYPE DHT11 // 만약 DHT22를 쓰신다면 DHT22로 변경하세요
 DHT* dht = nullptr;
@@ -20,67 +23,106 @@ unsigned long lastDhtReadTime = 0;
 float cachedH = 0.0;
 float cachedT = 0.0;
 
-// 안전 타임아웃: 시리얼 끊김 시 모터 자동 정지용
+// 안전 타이머 및 펌프 상태 변수
 unsigned long lastCommandTime = 0;
 bool pumpRunning = false;
 
 void setup() {
-  Serial.begin(115200); // 웹 브라우저와의 통신 속도
+  Serial.begin(115200); // PC 시리얼 모니터용 (디버깅)
+  BTSerial.begin(115200); // 블루투스 통신용 (충돌 회피)
   dht = new DHT(pinDht, DHTTYPE);
   dht->begin();
   updatePinModes();
 }
 
 void loop() {
-  if (Serial.available() > 0) {
-    String cmd = Serial.readStringUntil('\n'); 
-    cmd.trim(); 
-    lastCommandTime = millis(); // 명령 수신 시각 갱신
+  // 1. 블루투스(스마트폰/태블릿)로부터 수신된 명령 처리
+  if (BTSerial.available() > 0) {
+    String cmd = BTSerial.readStringUntil('\n'); 
+    cmd.trim(); // \r, \n 등 공백 제거
     
-    // RGB 색상 제어
-    if (cmd.startsWith("RGB:")) {
-      int firstComma = cmd.indexOf(',');
-      int secondComma = cmd.indexOf(',', firstComma + 1);
+    // PC 시리얼 모니터로 수신된 명령 디버깅 출력
+    Serial.println("DEBUG 수신: " + cmd);
+
+    if (cmd.length() > 0) {
+      lastCommandTime = millis(); // 명령 수신 시각 갱신
       
-      if (firstComma > 0 && secondComma > 0) {
-        int r = cmd.substring(4, firstComma).toInt();
-        int g = cmd.substring(firstComma + 1, secondComma).toInt();
-        int b = cmd.substring(secondComma + 1).toInt();
+      // RGB 색상 제어
+      if (cmd.startsWith("RGB:")) {
+        int firstComma = cmd.indexOf(',');
+        int secondComma = cmd.indexOf(',', firstComma + 1);
         
-        analogWrite(pinRgbR, r);
-        analogWrite(pinRgbG, g);
-        analogWrite(pinRgbB, b);
+        if (firstComma != -1 && secondComma != -1) {
+          int r = cmd.substring(4, firstComma).toInt();
+          int g = cmd.substring(firstComma + 1, secondComma).toInt();
+          int b = cmd.substring(secondComma + 1).toInt();
+          analogWrite(pinRgbR, r);
+          analogWrite(pinRgbG, g);
+          analogWrite(pinRgbB, b);
+        }
+      } 
+      // 워터 펌프(DC모터 DIR/PWM) 제어
+      else if (cmd.startsWith("PUMP:")) {
+        int comma = cmd.indexOf(',');
+        if (comma != -1) {
+          int dir = cmd.substring(5, comma).toInt();
+          int speed = cmd.substring(comma + 1).toInt();
+          digitalWrite(pinPumpDir, dir > 0 ? HIGH : LOW);
+          analogWrite(pinPumpPwm, speed); // 0 ~ 255 속도 제어
+          pumpRunning = (speed > 0);
+        }
       }
-    } 
-    // 워터 펌프(DC모터 DIR/PWM) 제어
-    else if (cmd.startsWith("PUMP:")) {
-      int comma = cmd.indexOf(',');
-      if (comma != -1) {
-        int dir = cmd.substring(5, comma).toInt();
-        int speed = cmd.substring(comma + 1).toInt();
-        digitalWrite(pinPumpDir, dir > 0 ? HIGH : LOW);
-        analogWrite(pinPumpPwm, speed); // 0 ~ 255 속도 제어
-        pumpRunning = (speed > 0);
+      // 부저(주파수) 제어
+      else if (cmd.startsWith("BUZ:")) {
+        int freq = cmd.substring(4).toInt();
+        if (freq > 0) tone(pinBuzzer, freq); // 원하는 주파수로 소리 출력
+        else noTone(pinBuzzer); // 0이면 끄기
       }
-    }
-    // 부저(주파수 톤) 제어
-    else if (cmd.startsWith("BUZ:")) {
-      int freq = cmd.substring(4).toInt();
-      if (freq > 0) {
-        tone(pinBuzzer, freq); // 원하는 주파수로 소리 출력
-      } else {
-        noTone(pinBuzzer);     // 소리 끄기
+      // 동적 핀 설정 제어
+      else if (cmd.startsWith("CFG:")) {
+        parseConfigString(cmd);
       }
-    }
-    // 동적 핀 설정 제어
-    else if (cmd.startsWith("CFG:")) {
-      parseConfigString(cmd);
+      // 센서값 요청 (Request-Response 동기화로 SoftwareSerial 충돌 방지)
+      else if (cmd.startsWith("PING")) {
+        sendSensors(true); // BTSerial로 전송
+      }
     }
   }
 
-  unsigned long currentMillis = millis();
+  // 2. PC(시리얼 모니터)로부터 수신된 명령 처리 (PC에서도 유선으로 조작 가능하게 유지)
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n'); 
+    cmd.trim(); 
+    if (cmd.length() > 0) {
+      lastCommandTime = millis(); 
+      if (cmd.startsWith("RGB:")) {
+        int firstComma = cmd.indexOf(',');
+        int secondComma = cmd.indexOf(',', firstComma + 1);
+        if (firstComma != -1 && secondComma != -1) {
+          int r = cmd.substring(4, firstComma).toInt();
+          int g = cmd.substring(firstComma + 1, secondComma).toInt();
+          int b = cmd.substring(secondComma + 1).toInt();
+          analogWrite(pinRgbR, r); analogWrite(pinRgbG, g); analogWrite(pinRgbB, b);
+        }
+      } else if (cmd.startsWith("PUMP:")) {
+        int comma = cmd.indexOf(',');
+        if (comma != -1) {
+          int dir = cmd.substring(5, comma).toInt(); int speed = cmd.substring(comma + 1).toInt();
+          digitalWrite(pinPumpDir, dir > 0 ? HIGH : LOW); analogWrite(pinPumpPwm, speed); pumpRunning = (speed > 0);
+        }
+      } else if (cmd.startsWith("BUZ:")) {
+        int freq = cmd.substring(4).toInt();
+        if (freq > 0) tone(pinBuzzer, freq); else noTone(pinBuzzer);
+      } else if (cmd.startsWith("CFG:")) {
+        parseConfigString(cmd);
+      } else if (cmd.startsWith("PING")) {
+        sendSensors(false); // Serial로 전송
+      }
+    }
+  }
 
   // DHT11은 측정 속도가 느리므로 2초에 한 번만 읽고 캐싱 (통신 딜레이 방지)
+  unsigned long currentMillis = millis();
   if (currentMillis - lastDhtReadTime >= 2000) {
     lastDhtReadTime = currentMillis;
     float readH = dht->readHumidity();
@@ -91,34 +133,35 @@ void loop() {
     }
   }
 
-  // 센서 데이터 0.2초마다 전송 (모니터링 대시보드 및 블록코딩용)
-  if (currentMillis - lastSensorReadTime >= 200) {
-    lastSensorReadTime = currentMillis;
-    
-    // lightDO 플래그에 따라 DO 또는 AO 방식으로 조도센서 읽기
-    int l;
-    if (lightDO) {
-      // DO 타입: HIGH(어두움)=1023, LOW(밝음)=0
-      l = digitalRead(pinLight) == HIGH ? 1023 : 0;
-    } else {
-      // AO 타입: 0~1023 연속 아날로그 값
-      l = analogRead(pinLight);
-    }
-    int s = analogRead(pinSoil);
-    
-    Serial.print("H:"); Serial.print(cachedH);
-    Serial.print(",T:"); Serial.print(cachedT);
-    Serial.print(",L:"); Serial.print(l);
-    Serial.print(",S:"); Serial.println(s);
-  }
-
-  // ★ 안전 타임아웃: 펌프 가동 중 3초간 명령 수신이 없으면 자동 정지
-  // (시리얼 연결 끊김 시 모터가 계속 도는 것을 방지)
+  // 안전 타임아웃: 펌프 가동 중 3초간 명령 수신이 없으면 자동 정지
   if (pumpRunning && lastCommandTime > 0 && (currentMillis - lastCommandTime > 3000)) {
     analogWrite(pinPumpPwm, 0);
     digitalWrite(pinPumpDir, LOW);
     noTone(pinBuzzer);
     pumpRunning = false;
+  }
+}
+
+// 센서 데이터를 읽어서 전송하는 함수
+void sendSensors(bool isBluetooth) {
+  int l;
+  if (lightDO) {
+    l = digitalRead(pinLight) == LOW ? 1023 : 0;
+  } else {
+    l = analogRead(pinLight);
+  }
+  int s = analogRead(pinSoil);
+  
+  if (isBluetooth) {
+    BTSerial.print("H:"); BTSerial.print(cachedH);
+    BTSerial.print(",T:"); BTSerial.print(cachedT);
+    BTSerial.print(",L:"); BTSerial.print(l);
+    BTSerial.print(",S:"); BTSerial.println(s);
+  } else {
+    Serial.print("H:"); Serial.print(cachedH);
+    Serial.print(",T:"); Serial.print(cachedT);
+    Serial.print(",L:"); Serial.print(l);
+    Serial.print(",S:"); Serial.println(s);
   }
 }
 
@@ -155,7 +198,7 @@ int parseAnalogPin(String pinStr) {
 
 // 웹에서 날아온 핀 설정 명령(CFG:) 파싱
 void parseConfigString(String cmd) {
-  // ★ 이전 핀 상태 완전 정리 (핀 번호 변경 시 타이머/출력 충돌 방지)
+  // 모든 핀 상태 리셋 (핀 번호 변경 시 타이머/출력 충돌 방지)
   noTone(pinBuzzer);
   analogWrite(pinPumpPwm, 0);
   digitalWrite(pinPumpDir, LOW);
@@ -168,69 +211,64 @@ void parseConfigString(String cmd) {
     int rComma = cmd.indexOf(',', rgbIdx);
     int gComma = cmd.indexOf(',', rComma + 1);
     int bComma = cmd.indexOf(',', gComma + 1);
-    if(bComma == -1) bComma = cmd.length();
-    pinRgbR = cmd.substring(rgbIdx + 4, rComma).toInt();
-    pinRgbG = cmd.substring(rComma + 1, gComma).toInt();
-    pinRgbB = cmd.substring(gComma + 1, bComma).toInt();
+    if(rComma != -1 && gComma != -1) {
+      int r = cmd.substring(rgbIdx + 4, rComma).toInt();
+      int g = cmd.substring(rComma + 1, gComma).toInt();
+      int b = (bComma != -1) ? cmd.substring(gComma + 1, bComma).toInt() : cmd.substring(gComma + 1).toInt();
+      if(r > 0) pinRgbR = r;
+      if(g > 0) pinRgbG = g;
+      if(b > 0) pinRgbB = b;
+    }
   }
   
   int pumpIdx = cmd.indexOf("PUMP:");
   if(pumpIdx != -1) {
     int comma1 = cmd.indexOf(',', pumpIdx);
     int comma2 = cmd.indexOf(',', comma1 + 1);
-    if(comma1 != -1 && comma2 != -1) {
-      pinPumpDir = cmd.substring(pumpIdx + 5, comma1).toInt();
-      pinPumpPwm = cmd.substring(comma1 + 1, comma2).toInt();
+    if(comma1 != -1) {
+      int dir = cmd.substring(pumpIdx + 5, comma1).toInt();
+      int pwm = (comma2 != -1) ? cmd.substring(comma1 + 1, comma2).toInt() : cmd.substring(comma1 + 1).toInt();
+      if(dir > 0) pinPumpDir = dir;
+      if(pwm > 0) pinPumpPwm = pwm;
     }
   }
 
   int buzIdx = cmd.indexOf("BUZ:");
   if(buzIdx != -1) {
     int comma = cmd.indexOf(',', buzIdx);
-    if(comma == -1) comma = cmd.length();
-    pinBuzzer = cmd.substring(buzIdx + 4, comma).toInt();
+    int buz = (comma != -1) ? cmd.substring(buzIdx + 4, comma).toInt() : cmd.substring(buzIdx + 4).toInt();
+    if(buz > 0) pinBuzzer = buz;
   }
 
   int dhtIdx = cmd.indexOf("DHT:");
   if(dhtIdx != -1) {
     int comma = cmd.indexOf(',', dhtIdx);
-    if(comma == -1) comma = cmd.length();
-    pinDht = cmd.substring(dhtIdx + 4, comma).toInt();
-    
-    // DHT 핀이 변경되었으면 객체 재생성
-    if (dht != nullptr) {
-      delete dht;
-    }
-    dht = new DHT(pinDht, DHTTYPE);
-    dht->begin();
+    int d = (comma != -1) ? cmd.substring(dhtIdx + 4, comma).toInt() : cmd.substring(dhtIdx + 4).toInt();
+    if(d > 0) pinDht = d;
   }
 
-  // 조도센서 핀 설정 ("A0" 등 아날로그 핀 문자열 지원)
   int ligIdx = cmd.indexOf("LIG:");
   if(ligIdx != -1) {
     int comma = cmd.indexOf(',', ligIdx);
-    if(comma == -1) comma = cmd.length();
-    pinLight = parseAnalogPin(cmd.substring(ligIdx + 4, comma));
+    String pinStr = (comma != -1) ? cmd.substring(ligIdx + 4, comma) : cmd.substring(ligIdx + 4);
+    if(pinStr.startsWith("A")) pinLight = A0 + pinStr.substring(1).toInt();
+    else { int val = pinStr.toInt(); if(val > 0) pinLight = val; }
   }
 
-  // 토양 수분센서 핀 설정
   int soilIdx = cmd.indexOf("SOIL:");
   if(soilIdx != -1) {
     int comma = cmd.indexOf(',', soilIdx);
-    if(comma == -1) comma = cmd.length();
-    pinSoil = parseAnalogPin(cmd.substring(soilIdx + 5, comma));
+    String pinStr = (comma != -1) ? cmd.substring(soilIdx + 5, comma) : cmd.substring(soilIdx + 5);
+    if(pinStr.startsWith("A")) pinSoil = A0 + pinStr.substring(1).toInt();
+    else { int val = pinStr.toInt(); if(val > 0) pinSoil = val; }
   }
 
-  // 조도센서 타입 설정 (LIGHT_TYPE:DO 또는 LIGHT_TYPE:AO)
-  int ltIdx = cmd.indexOf("LIGHT_TYPE:");
-  if(ltIdx != -1) {
-    int comma = cmd.indexOf(',', ltIdx);
-    if(comma == -1) comma = cmd.length();
-    String ltVal = cmd.substring(ltIdx + 11, comma);
-    ltVal.trim();
-    lightDO = (ltVal == "DO");
+  int lightTypeIdx = cmd.indexOf("LIGHT_TYPE:");
+  if(lightTypeIdx != -1) {
+    String t = cmd.substring(lightTypeIdx + 11);
+    if(t.startsWith("AO")) lightDO = false;
+    else if(t.startsWith("DO")) lightDO = true;
   }
 
-  // 변경된 핀 번호를 적용
   updatePinModes();
 }

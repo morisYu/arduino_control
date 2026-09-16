@@ -4,7 +4,7 @@
  * 
  * 향후 Blockly 환경에서도 접근 가능하도록 전역 네임스페이스(window.ArduinoSerial)에 등록
  */
-window.ArduinoSerial = {
+window.ArduinoSerialWired = {
     port: null,
     reader: null,
     readableStreamClosed: null,
@@ -186,8 +186,20 @@ window.ArduinoSerial = {
             return;
         }
 
+        // 블록코딩 무한루프 지연 방지: 직전 명령과 완전히 동일하면 큐에 추가 안 함
+        if (this.commandQueue.length > 0) {
+            if (this.commandQueue[this.commandQueue.length - 1] === cmd) {
+                return;
+            }
+        }
+        
+        // PING 중복 방지
+        if (cmd.startsWith('PING') && this.commandQueue.some(c => c.startsWith('PING'))) {
+            return;
+        }
+
         this.commandQueue.push(cmd);
-        // 너무 많은 명령어가 쌓여 메모리가 누수되는 것을 방지
+        // 너무 많은 명령어가 쌓여 메모리를 누수하는 것을 방지
         if (this.commandQueue.length > 50) {
             this.commandQueue.shift();
         }
@@ -208,7 +220,9 @@ window.ArduinoSerial = {
                 const cmd = this.commandQueue.shift();
                 try {
                     await writer.write(encoder.encode(cmd));
-                    this.log('송신: ' + cmd.trim());
+                    if (!cmd.startsWith('PING')) {
+                        this.log('송신: ' + cmd.trim());
+                    }
                 } catch (error) {
                     this.log('송신 오류: ' + error.message);
                 }
@@ -298,4 +312,4 @@ window.ArduinoSerial = {
     }
 };
 
-window.SmartFarmSerial = window.ArduinoSerial;
+
