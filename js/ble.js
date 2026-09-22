@@ -212,10 +212,10 @@ window.ArduinoBLE = {
                     // MLT-BT05 복제 모듈 + 윈도우 환경에서 writeWithoutResponse가 에러 없이 조용히 무시되는(Silent Drop) 현상 방지
                     // 무조건 응답을 받는(write) 방식을 최우선으로 사용하여 확실히 전송되도록 강제
                     try {
-                        if (this._txCharacteristic.properties.write) {
-                            await this._txCharacteristic.writeValueWithResponse(chunk);
-                        } else if (this._txCharacteristic.properties.writeWithoutResponse) {
+                        if (this._txCharacteristic.properties.writeWithoutResponse) {
                             await this._txCharacteristic.writeValueWithoutResponse(chunk);
+                        } else if (this._txCharacteristic.properties.write) {
+                            await this._txCharacteristic.writeValueWithResponse(chunk);
                         } else {
                             await this._txCharacteristic.writeValue(chunk);
                         }
