@@ -877,9 +877,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 await new Promise(r => setTimeout(r, 1500));
                 
-                const connected = await serial.connect(avrSerial.port);
+                window.ArduinoCommManager.setMode('wired');
+                const connected = await window.ArduinoSerial.connect(avrSerial.port);
                 if (connected) {
-                    updateConnectionUI(true);
+                    updateConnectionUI(true, 'wired');
                     flashStatusText.textContent = '펌웨어 설치 및 자동 연결 완료!';
                 } else {
                     flashStatusText.textContent = '설치 완료. 수동으로 연결해주세요.';

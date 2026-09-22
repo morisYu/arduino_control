@@ -41,7 +41,7 @@ window.ArduinoBLE = {
             this.log('기기 검색 중...');
             
             let options = {};
-            if (deviceNameFilter && deviceNameFilter.trim() !== '') {
+            if (deviceNameFilter && typeof deviceNameFilter === 'string' && deviceNameFilter.trim() !== '') {
                 const input = deviceNameFilter.trim();
                 const upper = input.toUpperCase();
                 const lower = input.toLowerCase();
