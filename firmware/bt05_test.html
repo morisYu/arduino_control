@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BT05 아두이노 제어기</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #10b981;
+      --success-hover: #059669;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .panel {
+      background: var(--card);
+      width: 100%;
+      max-width: 440px;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+    .panel-header h1 { font-size: 1.2rem; font-weight: 700; }
+    
+    .badge {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 600;
+      background: #fee2e2;
+      color: #991b1b;
+      transition: 0.3s;
+    }
+    .badge.on {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .btn-row { display: flex; gap: 10px; }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-conn { background: var(--primary); color: white; }
+    .btn-conn:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-disconn { background: #e2e8f0; color: #475569; }
+
+    .btn-on { background: var(--success); color: white; }
+    .btn-on:hover:not(:disabled) { background: var(--success-hover); }
+    .btn-off { background: var(--danger); color: white; }
+    .btn-off:hover:not(:disabled) { background: var(--danger-hover); }
+
+    .input-row { display: flex; gap: 8px; }
+    .input-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .input-row input:focus { border-color: var(--primary); }
+    .input-row button { flex: 0 0 70px; background: #334155; color: white; }
+
+    .console-box {
+      background: #0f172a;
+      color: #38bdf8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      height: 160px;
+      padding: 12px;
+      border-radius: 8px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .log-tx { color: #fbbf24; }
+    .log-rx { color: #4ade80; }
+    .log-err { color: #f87171; }
+    .log-sys { color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h1>BT05 Web BLE 제어기</h1>
+      <span id="badge" class="badge">연결 해제됨</span>
+    </div>
+
+    <!-- 장치 연결 버튼 -->
+    <div class="btn-row">
+      <button id="btnConnect" class="btn-conn">블루투스 연결</button>
+      <button id="btnDisconnect" class="btn-disconn" disabled>연결 끊기</button>
+    </div>
+
+    <!-- LED 온오프 제어 -->
+    <div class="btn-row">
+      <button id="btnOn" class="btn-on" disabled>LED 켜기 (1)</button>
+      <button id="btnOff" class="btn-off" disabled>LED 끄기 (0)</button>
+    </div>
+
+    <!-- 임의 문자열 전송 -->
+    <div class="input-row">
+      <input type="text" id="customInput" placeholder="전송할 텍스트 입력..." disabled>
+      <button id="btnSend" disabled>전송</button>
+    </div>
+
+    <!-- 터미널 콘솔 -->
+    <div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.8rem; color:var(--muted);">
+        <span>통신 로그</span>
+        <span style="cursor:pointer; color:var(--primary);" id="btnClear">지우기</span>
+      </div>
+      <div id="console" class="console-box"></div>
+    </div>
+  </div>
+
+  <script>
+    // MLT-BT05 GATT 통신 표준 UUID
+    const SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
+    const CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
+
+    let bleDevice = null;
+    let bleChar = null;
+
+    const badge = document.getElementById('badge');
+    const btnConnect = document.getElementById('btnConnect');
+    const btnDisconnect = document.getElementById('btnDisconnect');
+    const btnOn = document.getElementById('btnOn');
+    const btnOff = document.getElementById('btnOff');
+    const customInput = document.getElementById('customInput');
+    const btnSend = document.getElementById('btnSend');
+    const consoleBox = document.getElementById('console');
+    const btnClear = document.getElementById('btnClear');
+
+    function log(msg, type = 'sys') {
+      const row = document.createElement('div');
+      const time = new Date().toTimeString().split(' ')[0];
+      row.className = `log-${type}`;
+      
+      let tag = '[SYS]';
+      if (type === 'tx') tag = '[TX >]';
+      if (type === 'rx') tag = '[RX <]';
+      if (type === 'err') tag = '[ERR]';
+
+      row.textContent = `${time} ${tag} ${msg}`;
+      consoleBox.appendChild(row);
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
+
+    function setUI(connected, name = '') {
+      if (connected) {
+        badge.textContent = `연결됨: ${name}`;
+        badge.className = 'badge on';
+        btnConnect.disabled = true;
+        btnDisconnect.disabled = false;
+        btnOn.disabled = false;
+        btnOff.disabled = false;
+        customInput.disabled = false;
+        btnSend.disabled = false;
+      } else {
+        badge.textContent = '연결 해제됨';
+        badge.className = 'badge';
+        btnConnect.disabled = false;
+        btnDisconnect.disabled = true;
+        btnOn.disabled = true;
+        btnOff.disabled = true;
+        customInput.disabled = true;
+        btnSend.disabled = true;
+      }
+    }
+
+    // 1. 장치 검색 및 연결
+    btnConnect.addEventListener('click', async () => {
+      try {
+        log("주변 블루투스 기기 검색 중...");
+        bleDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [SERVICE_UUID]
+        });
+
+        log(`장치 선택: ${bleDevice.name}`);
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        bleChar = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        // 아두이노 회신값 알림(Notify) 리스너 등록
+        await bleChar.startNotifications();
+        bleChar.addEventListener('characteristicvaluechanged', (e) => {
+          const val = new TextDecoder().decode(e.target.value);
+          log(val.trim(), 'rx');
+        });
+
+        setUI(true, bleDevice.name);
+        log("통신 준비 완료!", 'sys');
+
+      } catch (err) {
+        log(err.message, 'err');
+        setUI(false);
+      }
+    });
+
+    // 2. 연결 종료
+    btnDisconnect.addEventListener('click', () => {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+    });
+
+    function onDisconnected() {
+      log("블루투스 연결이 끊어졌습니다.", 'sys');
+      bleChar = null;
+      setUI(false);
+    }
+
+    // 3. 데이터 송신 (호환성 보장)
+    async function send(dataStr) {
+      if (!bleChar) return;
+      try {
+        const payload = new TextEncoder().encode(dataStr);
+        
+        // 클론 칩셋 호환성: WithoutResponse 우선 지원
+        if (bleChar.properties.writeWithoutResponse && bleChar.writeValueWithoutResponse) {
+          await bleChar.writeValueWithoutResponse(payload);
+        } else if (bleChar.writeValueWithResponse) {
+          await bleChar.writeValueWithResponse(payload);
+        } else {
+          await bleChar.writeValue(payload);
+        }
+
+        log(dataStr, 'tx');
+      } catch (err) {
+        log(`송신 오류: ${err.message}`, 'err');
+      }
+    }
+
+    btnOn.addEventListener('click', () => send('1'));
+    btnOff.addEventListener('click', () => send('0'));
+
+    btnSend.addEventListener('click', () => {
+      const txt = customInput.value.trim();
+      if (txt) {
+        send(txt);
+        customInput.value = '';
+      }
+    });
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') btnSend.click();
+    });
+
+    btnClear.addEventListener('click', () => {
+      consoleBox.innerHTML = '';
+    });
+  </script>
+</body>
+</html>

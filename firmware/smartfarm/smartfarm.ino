@@ -27,9 +27,39 @@ float cachedT = 0.0;
 unsigned long lastCommandTime = 0;
 bool pumpRunning = false;
 
+// 블루투스 모듈 통신 속도 자동 설정 (v6.1 HM-10 호환 모듈 전용)
+void setupBTBaud() {
+  // 1. 이미 115200인지 확인
+  BTSerial.begin(115200);
+  delay(100);
+  while (BTSerial.available()) BTSerial.read();
+  BTSerial.print("AT\r\n");
+  delay(500);
+  String res = "";
+  while (BTSerial.available()) res += (char)BTSerial.read();
+  if (res.indexOf("OK") != -1) return; // 이미 115200 → 바로 진행
+
+  // 2. 9600에서 115200으로 변경
+  BTSerial.begin(9600);
+  delay(100);
+  while (BTSerial.available()) BTSerial.read();
+  BTSerial.print("AT\r\n");
+  delay(500);
+  res = "";
+  while (BTSerial.available()) res += (char)BTSerial.read();
+  if (res.indexOf("OK") != -1) {
+    BTSerial.print("AT+BAUD8\r\n"); // v6.1: BAUD8 = 115200
+    delay(500);
+  }
+
+  // 3. 115200으로 전환
+  BTSerial.begin(115200);
+  delay(100);
+}
+
 void setup() {
   Serial.begin(115200); // PC 시리얼 모니터용 (디버깅)
-  BTSerial.begin(115200); // 블루투스 통신용 (충돌 회피)
+  setupBTBaud();        // 블루투스 모듈 통신 속도 자동 설정
   dht = new DHT(pinDht, DHTTYPE);
   dht->begin();
   updatePinModes();
