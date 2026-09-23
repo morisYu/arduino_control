@@ -687,9 +687,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnConnectBle.addEventListener('click', async () => {
             if (!isConnected) {
+                // 태블릿/모바일: 햄버거 메뉴(action-buttons-container)가 열려있으면
+                // 모달 위에 겹쳐져서 input 터치가 안 되므로 반드시 먼저 닫아줌
+                const actionBtns = document.getElementById('action-buttons-container');
+                if (actionBtns) {
+                    actionBtns.classList.add('hidden');
+                    actionBtns.classList.remove('flex');
+                }
                 bleInput.value = '';
                 bleModal.classList.remove('hidden');
-                bleInput.focus();
+                // 태블릿에서 focus()는 가상 키보드를 띄우지 못하므로,
+                // 짧은 딜레이 후 focus하여 최소한 커서라도 활성화
+                setTimeout(() => bleInput.focus(), 100);
             } else {
                 await serial.disconnect();
             }
@@ -724,6 +733,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error("BLE 연결 에러 발생:", error);
                 serial.log('BLE 연결 실패: ' + (error.message || '알 수 없는 에러'));
             }
+        });
+
+        // 모달 배경 클릭 시 닫기
+        bleModal.addEventListener('click', (e) => {
+            if (e.target === bleModal) {
+                bleModal.classList.add('hidden');
+            }
+        });
+
+        // 태블릿에서 input 터치 이벤트가 부모 요소에 의해 가로채이지 않도록 보호
+        bleInput.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
         });
     }
 

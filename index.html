@@ -70,13 +70,13 @@
                 </div>
             </div>
         </div>
-        <div class="flex-1 flex justify-center items-center gap-2 hidden xl:flex absolute left-1/2 -translate-x-1/2">
+        <div class="flex-1 flex justify-center items-center gap-2 hidden 2xl:flex absolute left-1/2 -translate-x-1/2">
             <button id="tab-dashboard" class="text-sm font-bold bg-white/80 dark:bg-white/20 backdrop-blur-sm px-6 py-2 rounded-full shadow-sm text-gray-900 dark:text-white hover:bg-white transition border border-gray-200 dark:border-white/10">모니터링 대시보드</button>
             <button id="tab-coding" class="text-sm font-bold bg-transparent px-6 py-2 rounded-full text-gray-500 dark:text-white/70 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-white/10 transition border border-transparent">블록 코딩</button>
         </div>
         <div class="flex items-center gap-3 relative">
             <!-- 모바일/태블릿용 뷰 전환 토글 버튼 -->
-            <button id="btn-view-toggle" class="xl:hidden flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 dark:bg-white/10 hover:bg-white/90 dark:hover:bg-white/20 transition backdrop-blur-sm shadow-sm text-gray-700 dark:text-white border border-gray-200 dark:border-transparent" title="화면 전환">
+            <button id="btn-view-toggle" class="2xl:hidden flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 dark:bg-white/10 hover:bg-white/90 dark:hover:bg-white/20 transition backdrop-blur-sm shadow-sm text-gray-700 dark:text-white border border-gray-200 dark:border-transparent" title="화면 전환">
                 <svg id="icon-view-dashboard" class="w-5 h-5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                 <span id="text-view-dashboard" class="text-sm font-bold block">대시보드</span>
                 
@@ -90,24 +90,24 @@
             </button>
             
             <!-- Action Buttons Container -->
-            <div id="action-buttons-container" class="hidden xl:flex flex-col xl:flex-row absolute xl:static top-full right-0 mt-3 xl:mt-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md xl:backdrop-blur-none xl:bg-transparent xl:dark:bg-transparent p-4 xl:p-0 rounded-2xl xl:rounded-none shadow-2xl xl:shadow-none border border-gray-200 dark:border-slate-700 xl:border-none gap-3 z-50 min-w-[180px]">
-                <button id="btn-install-fw" class="bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 px-4 py-2 rounded-full text-sm font-bold shadow-sm transition flex items-center justify-center gap-1 w-full xl:w-auto">
+            <div id="action-buttons-container" class="hidden 2xl:flex flex-col 2xl:flex-row absolute 2xl:static top-full right-0 mt-3 2xl:mt-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md 2xl:backdrop-blur-none 2xl:bg-transparent 2xl:dark:bg-transparent p-4 2xl:p-0 rounded-2xl 2xl:rounded-none shadow-2xl 2xl:shadow-none border border-gray-200 dark:border-slate-700 2xl:border-none gap-3 z-50 min-w-[180px]">
+                <button id="btn-install-fw" class="bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 px-4 py-2 rounded-full text-sm font-bold shadow-sm transition flex items-center justify-center gap-1 w-full 2xl:w-auto">
                     펌웨어 설치
                 </button>
-                <button id="btn-pin-config" class="bg-slate-600 text-white hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 px-4 py-2 rounded-full text-sm font-bold shadow-sm transition w-full xl:w-auto text-center">
+                <button id="btn-pin-config" class="bg-slate-600 text-white hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 px-4 py-2 rounded-full text-sm font-bold shadow-sm transition w-full 2xl:w-auto text-center">
                     핀 설정
                 </button>
-                <span id="connection-status" class="px-4 py-2 rounded-full bg-red-500/90 text-white text-sm font-bold shadow-sm transition-colors w-full xl:w-auto text-center block xl:inline-block border border-red-400/50 backdrop-blur-sm">연결 끊김</span>
-                <button id="btn-connect-ble" class="xl:bg-blue-600 bg-blue-600 xl:text-white text-white dark:bg-blue-500 dark:text-white xl:hover:bg-blue-700 hover:bg-blue-700 px-5 py-2 rounded-full text-sm font-extrabold shadow-md transition w-full xl:w-auto text-center xl:border-none border-blue-700 border">
+                <span id="connection-status" class="px-4 py-2 rounded-full bg-red-500/90 text-white text-sm font-bold shadow-sm transition-colors w-full 2xl:w-auto text-center block 2xl:inline-block border border-red-400/50 backdrop-blur-sm">연결 끊김</span>
+                <button id="btn-connect-ble" class="2xl:bg-blue-600 bg-blue-600 2xl:text-white text-white dark:bg-blue-500 dark:text-white 2xl:hover:bg-blue-700 hover:bg-blue-700 px-5 py-2 rounded-full text-sm font-extrabold shadow-md transition w-full 2xl:w-auto text-center 2xl:border-none border-blue-700 border">
                     블루투스 연결
                 </button>
-                <button id="btn-connect" class="xl:bg-indigo-600 bg-indigo-600 xl:text-white text-white dark:bg-indigo-500 dark:text-white xl:hover:bg-indigo-700 hover:bg-indigo-700 px-5 py-2 rounded-full text-sm font-extrabold shadow-md transition w-full xl:w-auto text-center xl:border-none border-indigo-700 border">
+                <button id="btn-connect" class="2xl:bg-indigo-600 bg-indigo-600 2xl:text-white text-white dark:bg-indigo-500 dark:text-white 2xl:hover:bg-indigo-700 hover:bg-indigo-700 px-5 py-2 rounded-full text-sm font-extrabold shadow-md transition w-full 2xl:w-auto text-center 2xl:border-none border-indigo-700 border">
                     시리얼 연결
                 </button>
             </div>
 
             <!-- Hamburger Button -->
-            <button id="btn-hamburger" class="xl:hidden p-2 rounded-full bg-white/60 dark:bg-white/10 hover:bg-white/90 dark:hover:bg-white/20 transition backdrop-blur-sm shadow-sm text-gray-700 dark:text-white border border-gray-200 dark:border-transparent" onclick="document.getElementById('action-buttons-container').classList.toggle('hidden'); document.getElementById('action-buttons-container').classList.toggle('flex')">
+            <button id="btn-hamburger" class="2xl:hidden p-2 rounded-full bg-white/60 dark:bg-white/10 hover:bg-white/90 dark:hover:bg-white/20 transition backdrop-blur-sm shadow-sm text-gray-700 dark:text-white border border-gray-200 dark:border-transparent" onclick="document.getElementById('action-buttons-container').classList.toggle('hidden'); document.getElementById('action-buttons-container').classList.toggle('flex')">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
         </div>
@@ -235,7 +235,7 @@
     </div>
 
     <!-- BLE Device Name Prompt Modal -->
-    <div id="ble-name-prompt-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-[2px]">
+    <div id="ble-name-prompt-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-[60] backdrop-blur-[2px]">
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-6 w-full max-w-sm transform transition-all border-2 border-blue-500 dark:border-blue-600">
             <div class="flex items-center gap-3 mb-4">
                 <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 text-xl">
