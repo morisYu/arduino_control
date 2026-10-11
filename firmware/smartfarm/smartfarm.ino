@@ -27,19 +27,39 @@ float cachedT = 0.0;
 unsigned long lastCommandTime = 0;
 bool pumpRunning = false;
 
-// 블루투스 모듈 통신 속도 자동 설정 (v6.1 HM-10 호환 모듈 전용)
+// 블루투스 모듈 통신 속도를 SoftwareSerial 권장 속도인 9600bps로 설정
 void setupBTBaud() {
-  // 1. 이미 115200인지 확인
-  BTSerial.begin(115200);
+  Serial.println(F("----------------------------------------"));
+  Serial.println(F("[BT] 블루투스 모듈 속도 점검 중..."));
+
+  // 1. 이미 9600bps인지 확인 (기본 및 권장 속도)
+  BTSerial.begin(9600);
   delay(100);
   while (BTSerial.available()) BTSerial.read();
   BTSerial.print("AT\r\n");
   delay(500);
   String res = "";
   while (BTSerial.available()) res += (char)BTSerial.read();
-  if (res.indexOf("OK") != -1) return; // 이미 115200 → 바로 진행
+  if (res.indexOf("OK") != -1) {
+    Serial.println(F("[BT] >> 통신 속도 9600 bps 정상 확인 완료 (OK)"));
+    Serial.println(F("----------------------------------------"));
+    return; // 이미 9600bps → 정상
+  }
 
-  // 2. 9600에서 115200으로 변경
+  // 2. 만약 115200bps 등 다른 속도에 걸려있을 경우 9600bps 복구 명령 전송
+  Serial.println(F("[BT] 9600bps 미응답 -> 115200에서 9600 복구 시도"));
+  BTSerial.begin(115200);
+  delay(100);
+  BTSerial.print("AT\r\n");
+  delay(100);
+  BTSerial.print("AT+BAUD0\r\n"); // HM-10 표준 (0 = 9600)
+  delay(200);
+  BTSerial.print("AT+BAUD4\r\n"); // MLT-BT05 / CC41-A (4 = 9600)
+  delay(200);
+  BTSerial.print("AT+RESET\r\n"); // 설정 반영 재부팅
+  delay(1000);
+
+  // 3. 다시 9600bps로 확인
   BTSerial.begin(9600);
   delay(100);
   while (BTSerial.available()) BTSerial.read();
@@ -48,17 +68,25 @@ void setupBTBaud() {
   res = "";
   while (BTSerial.available()) res += (char)BTSerial.read();
   if (res.indexOf("OK") != -1) {
-    BTSerial.print("AT+BAUD8\r\n"); // v6.1: BAUD8 = 115200
-    delay(500);
+    Serial.println(F("[BT] >> 9600 bps 복구 성공! (OK)"));
+  } else {
+    Serial.println(F("[BT] !! 경고: AT 응답 없음"));
+    Serial.println(F("     1) 이미 블루투스가 연결(페어링)되어 있거나"));
+    Serial.println(F("     2) 아두이노 배선(RX: Pin 2, TX: Pin 5)을 점검하세요."));
   }
-
-  // 3. 115200으로 전환
-  BTSerial.begin(115200);
-  delay(100);
+  Serial.println(F("----------------------------------------"));
 }
 
 void setup() {
   Serial.begin(115200); // PC 시리얼 모니터용 (디버깅)
+  delay(500);
+  Serial.println(F("========================================"));
+  Serial.println(F(">> 링크보드 스마트팜 펌웨어 시작 <<"));
+  Serial.println(F("[BT 배선] 아두이노 D2(RX) <-> BT TXD"));
+  Serial.println(F("          아두이노 D5(TX) <-> BT RXD"));
+  Serial.println(F("[센서 배선] DHT11: D3, 조도: A0, 토양: A1"));
+  Serial.println(F("========================================"));
+
   setupBTBaud();        // 블루투스 모듈 통신 속도 자동 설정
   dht = new DHT(pinDht, DHTTYPE);
   dht->begin();
@@ -72,7 +100,8 @@ void loop() {
     cmd.trim(); // \r, \n 등 공백 제거
     
     // PC 시리얼 모니터로 수신된 명령 디버깅 출력
-    Serial.println("DEBUG 수신: " + cmd);
+    Serial.print(F("[BT 수신] : "));
+    Serial.println(cmd);
 
     if (cmd.length() > 0) {
       lastCommandTime = millis(); // 명령 수신 시각 갱신
@@ -187,6 +216,7 @@ void sendSensors(bool isBluetooth) {
     BTSerial.print(",T:"); BTSerial.print(cachedT);
     BTSerial.print(",L:"); BTSerial.print(l);
     BTSerial.print(",S:"); BTSerial.println(s);
+    Serial.println(F("[BT 송신] 센서 데이터 회신 완료"));
   } else {
     Serial.print("H:"); Serial.print(cachedH);
     Serial.print(",T:"); Serial.print(cachedT);

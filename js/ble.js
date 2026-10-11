@@ -74,14 +74,19 @@ window.ArduinoBLE = {
             this._rxCharacteristic = await service.getCharacteristic(this.CHAR_UUID);
             
             // TX용 특성 (명령 전송용)
-            // 정품 HM-10은 FFE1 하나로 송수신을 다 하지만, MLT-BT05 복제 모듈은 FFE2를 TX 전용으로 사용하는 경우가 많음!
-            try {
-                this._txCharacteristic = await service.getCharacteristic('0000ffe2-0000-1000-8000-00805f9b34fb');
-                this.log('MLT-BT05 TX 전용 채널(FFE2) 연결 성공');
-            } catch (e) {
-                // FFE2가 없으면(정품 HM-10) 기존대로 FFE1을 공용으로 사용
+            // FFE1이 쓰기(Write/WriteWithoutResponse)를 지원하면 FFE1을 공용으로 사용 (정품 HM-10 및 대부분의 BT-05)
+            // FFE1이 Notify 전용인 경우에만 FFE2 채널 탐색
+            if (this._rxCharacteristic.properties.write || this._rxCharacteristic.properties.writeWithoutResponse) {
                 this._txCharacteristic = this._rxCharacteristic;
                 this.log('공용 채널(FFE1) 송수신 모드 활성화');
+            } else {
+                try {
+                    this._txCharacteristic = await service.getCharacteristic('0000ffe2-0000-1000-8000-00805f9b34fb');
+                    this.log('MLT-BT05 TX 전용 채널(FFE2) 연결 성공');
+                } catch (e) {
+                    this._txCharacteristic = this._rxCharacteristic;
+                    this.log('공용 채널(FFE1) 송수신 모드 활성화 (폴백)');
+                }
             }
             
             // 데이터 수신 시작 (Notify)
