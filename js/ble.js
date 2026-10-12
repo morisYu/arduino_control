@@ -22,6 +22,7 @@ window.ArduinoBLE = {
     commandQueue: [],
     isWriting: false,
     SEND_THROTTLE_MS: 30, // HM-10 버퍼 오버플로우 방지 (30ms)
+    _lastCommands: {}, // 동일 명령 연속 전송 횟수 관리 { [cmdKey]: { cmd: string, count: number } }
 
     log: function(msg) {
         console.log("[BLE]", msg);
@@ -156,25 +157,51 @@ window.ArduinoBLE = {
     },
 
     /**
+     * 명령어 종류(키) 추출 (동일 액추에이터 대상 판별)
+     */
+    _getCommandKey: function(cmd) {
+        if (cmd.startsWith('SRV:')) {
+            const commaIdx = cmd.indexOf(',');
+            return commaIdx !== -1 ? cmd.substring(0, commaIdx) : 'SRV';
+        }
+        const colonIdx = cmd.indexOf(':');
+        return colonIdx !== -1 ? cmd.substring(0, colonIdx) : cmd;
+    },
+
+    /**
      * 명령어 전송 (큐에 추가)
      */
     sendCommand: function(cmd) {
         if (!this._txCharacteristic || !this._device || !this._device.gatt.connected) {
             return;
         }
-        
-        // 블록코딩 무한루프 등에서 동일한 명령(예: BUZ:1000)이 수백 번 밀려들어와 블루투스 큐가 마비(지연)되는 것을 방지
-        // 방금 넣은 명령과 완전히 똑같은 명령이라면 큐에 추가하지 않고 무시함
-        if (this.commandQueue.length > 0) {
-            const lastCmd = this.commandQueue[this.commandQueue.length - 1];
-            if (lastCmd === cmd) {
+
+        const normalizedCmd = cmd.trim();
+
+        // PING 명령어가 이미 큐에 있다면 중복해서 넣지 않음 (센서 데이터 폴링 전용)
+        if (normalizedCmd.startsWith('PING')) {
+            if (this.commandQueue.some(c => c.trim().startsWith('PING'))) {
                 return;
             }
-        }
-        
-        // PING 명령어가 이미 큐에 있다면 중복해서 넣지 않음
-        if (cmd.startsWith('PING') && this.commandQueue.some(c => c.startsWith('PING'))) {
+            this.commandQueue.push(cmd);
+            this.processQueue();
             return;
+        }
+
+        // 블록코딩 계속 반복하기 등에서 동일한 명령이 무한히 큐에 밀려들어와
+        // 블루투스 대역폭을 독점하고 센서 수신/액추에이터 제어가 마비되는 것을 방지
+        // 전기적인 노이즈/패킷 누락을 방지하기 위해 동일 명령은 최대 3회까지만 연속 전송 허용
+        if (!this._lastCommands) this._lastCommands = {};
+        const key = this._getCommandKey(normalizedCmd);
+        const record = this._lastCommands[key];
+
+        if (record && record.cmd === normalizedCmd) {
+            if (record.count >= 3) {
+                return; // 3회 연속 전송 완료 후 추가 중복 발송 차단
+            }
+            record.count++;
+        } else {
+            this._lastCommands[key] = { cmd: normalizedCmd, count: 1 };
         }
 
         this.commandQueue.push(cmd);
@@ -245,6 +272,7 @@ window.ArduinoBLE = {
      */
     clearQueue: function() {
         this.commandQueue = [];
+        this._lastCommands = {};
         // isWriting을 여기서 강제로 false로 바꾸면 현재 진행 중인 루프와 새로 시작되는 루프가 충돌(GATT in progress)합니다.
         // 큐만 비워두면 기존 루프가 알아서 남은 명령을 처리하거나 종료합니다.
     }
