@@ -365,10 +365,83 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     Blockly.ContextMenuRegistry.registry.register(downloadImageItem);
 
+    // --- 태블릿/모바일 인라인 에디터 및 키패드 유지 최적화 ---
+    if (Blockly.FieldTextInput && Blockly.FieldTextInput.prototype) {
+        // 1. "값 바꾸기" 모달 대신 블록에서 바로 인라인 편집하도록 강제
+        Blockly.FieldTextInput.prototype.showEditor_ = function(opt_quietInput) {
+            this.workspace_ = this.sourceBlock_.workspace;
+            this.showInlineEditor(opt_quietInput);
+        };
+
+        // 2. 인라인 에디터 input 생성 시 태블릿 가상 키보드 및 이벤트 최적화
+        const origWidgetCreate = Blockly.FieldTextInput.prototype.widgetCreate_;
+        Blockly.FieldTextInput.prototype.widgetCreate_ = function() {
+            const htmlInput = origWidgetCreate.call(this);
+            if (!htmlInput) return htmlInput;
+
+            // 숫자 필드(FieldNumber 또는 math_number 블록 등)인 경우 모바일/태블릿에서 편리하게 숫자 키패드(decimal) 호출
+            const isNumber = (this instanceof Blockly.FieldNumber) || 
+                             (this.sourceBlock_ && (this.sourceBlock_.type === 'math_number' || this.name === 'NUM'));
+            if (isNumber) {
+                htmlInput.setAttribute('inputmode', 'decimal');
+                htmlInput.setAttribute('autocomplete', 'off');
+                htmlInput.setAttribute('autocorrect', 'off');
+                htmlInput.setAttribute('autocapitalize', 'off');
+                htmlInput.setAttribute('spellcheck', 'false');
+            }
+
+            // 터치/포인터 이벤트 전파 차단:
+            // 태블릿에서 input 영역을 터치/조작할 때 이벤트가 워크스페이스로 전파되어
+            // 워크스페이스가 '외부 클릭'으로 인식해 에디터를 닫고 키패드를 숨기는 현상 방지
+            const stopPropagation = (e) => {
+                e.stopPropagation();
+            };
+            ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'].forEach(evt => {
+                htmlInput.addEventListener(evt, stopPropagation, { passive: true });
+            });
+
+            // 태블릿에서 키패드가 나왔다가 다시 숨어버리는 현상 방지 (포커스 확실하게 유지)
+            requestAnimationFrame(() => {
+                if (htmlInput.isConnected) {
+                    htmlInput.focus({ preventScroll: true });
+                    try { htmlInput.select(); } catch(err) {}
+                }
+            });
+            setTimeout(() => {
+                if (htmlInput.isConnected && document.activeElement !== htmlInput) {
+                    htmlInput.focus({ preventScroll: true });
+                    try { htmlInput.select(); } catch(err) {}
+                }
+            }, 60);
+
+            return htmlInput;
+        };
+
+        // 3. 태블릿에서 가상 키보드가 올라올 때 window.resize 발생 시 에디터가 닫히지(hide) 않도록 방어
+        const origReposition = Blockly.FieldTextInput.prototype.repositionForWindowResize;
+        Blockly.FieldTextInput.prototype.repositionForWindowResize = function() {
+            if (this.isBeingEdited_ && this.htmlInput_) {
+                try {
+                    if (origReposition) {
+                        origReposition.call(this);
+                    } else {
+                        this.resizeEditor_();
+                    }
+                } catch (e) {
+                    try { this.resizeEditor_(); } catch (err) {}
+                }
+                // resize 이벤트 시 WidgetDiv가 Qf()(hide) 되지 않도록 항상 true 반환
+                return true;
+            }
+            return origReposition ? origReposition.call(this) : false;
+        };
+    }
+
     // Blockly 주입 (Injection) - 렌더러는 기본으로 두어 크기를 줄이고, 테마는 Zelos로 설정해 밝은 색상 유지
     workspace = Blockly.inject('blocklyDiv', {
         toolbox: buildToolbox(null),
         theme: Blockly.Themes ? Blockly.Themes.Zelos : undefined,
+        modalInputs: false, // 태블릿/모바일에서도 모달 팝업 대신 인라인 에디터 사용
         grid: { spacing: 20, length: 3, colour: '#ccc', snap: true },
         trashcan: true,
         move: {
@@ -498,6 +571,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 커스텀 Blockly 프롬프트 모달 (변수/함수 이름 입력) ---
     Blockly.dialog.setPrompt(function(message, defaultValue, callback) {
+        // "값 바꾸기" 요청인 경우 모달을 띄우지 않고 블록에서 직접 변경하도록 방어
+        if (message && (message.includes('값 바꾸기') || message.includes('Change value'))) {
+            if (callback) callback(defaultValue);
+            return;
+        }
+
         const modal = document.getElementById('blockly-prompt-modal');
         const messageEl = document.getElementById('blockly-prompt-message');
         const inputEl = document.getElementById('blockly-prompt-input');

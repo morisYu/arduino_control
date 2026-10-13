@@ -92,3 +92,19 @@ input[type="color"]::-webkit-color-swatch {
     padding-right: 28px;
 }
 
+/* 태블릿/모바일 인라인 블록 에디터 최적화 */
+.blocklyWidgetDiv {
+    z-index: 40 !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    /* 모바일/태블릿 브라우저에서 인라인 input 포커스 시 화면 자동 확대(Auto-zoom) 방지 */
+    /* 16px 미만 폰트일 때 브라우저가 화면을 줌인하여 뷰포트가 흔들리고 키패드가 닫히는 문제 해결 */
+    .blocklyHtmlInput {
+        font-size: 16px !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+}
+
+
